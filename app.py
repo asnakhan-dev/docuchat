@@ -353,3 +353,163 @@ def get_answer(rag_chain, user_question):
     
     return answer, sources
     # Dono return karo — answer aur sources list
+    
+# ============================================================
+# PART 4 — STREAMLIT UI
+# Streamlit top to bottom execute karta hai har baar
+# jab user koi action leta hai
+# ============================================================
+
+def main():
+
+    # Page configuration — browser tab title aur layout
+    st.set_page_config(
+        page_title="DocuChat",
+        page_icon="",
+        layout="wide"
+    )
+
+    st.title("DocuChat")
+    st.markdown("Chat with your PDF using LLaMA 3.3 + RAG")
+    st.divider()
+
+    # ---- Session State ----
+    # Streamlit har action pe page reload karta hai
+    # session_state mein jo save karo wo reload ke baad bhi rehta hai
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    if "rag_chain" not in st.session_state:
+        st.session_state.rag_chain = None
+
+    if "pdf_processed" not in st.session_state:
+        st.session_state.pdf_processed = False
+
+    # ---- Two column layout ----
+    # Left = PDF upload, Right = Chat
+    left_col, right_col = st.columns([1, 2])
+
+    # ================================================
+    # LEFT COLUMN — PDF Upload
+    # ================================================
+    with left_col:
+        st.subheader("Upload PDF")
+
+        uploaded_file = st.file_uploader(
+            label="Choose a PDF file",
+            type=["pdf"]
+        )
+
+        if uploaded_file is not None:
+            # File disk pe save karo
+            # PyPDFLoader file path chahta hai, direct object nahi leta
+            pdf_path = f"docs/{uploaded_file.name}"
+            with open(pdf_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+
+            st.success(f"Uploaded: {uploaded_file.name}")
+
+            if st.button("Process PDF", type="primary"):
+                with st.spinner("Processing... this may take a minute"):
+                    # PDF load aur chunk karo
+                    st.info("Reading and chunking PDF...")
+                    chunks = load_and_split_pdf(pdf_path)
+
+                    # Embeddings banao aur ChromaDB mein store karo
+                    st.info("Creating embeddings...")
+                    vector_store = create_vector_store(chunks)
+
+                    # RAG chain banao
+                    st.info("Building RAG chain...")
+                    st.session_state.rag_chain = create_rag_chain(vector_store)
+
+                    st.session_state.pdf_processed = True
+                    st.session_state.chat_history = []
+                    # Naya PDF process hone pe chat history clear karo
+
+                st.success("Done. Ask your questions now.")
+
+        # PDF process hone ke baad stats dikhao
+        # Ye recruiter ko dikhata hai ki tum apna stack samajhte ho
+        if st.session_state.pdf_processed:
+            st.divider()
+            st.subheader("Details")
+            st.markdown(f"**Model:** `{LLM_MODEL}`")
+            st.markdown(f"**Embeddings:** `{EMBEDDING_MODEL}`")
+            st.markdown(f"**Vector DB:** ChromaDB")
+            st.markdown(f"**Chunk size:** 1000 chars")
+            st.markdown(f"**Overlap:** 200 chars")
+            st.markdown(f"**Top-K:** 4 chunks")
+
+            if st.button("Clear Chat"):
+                st.session_state.chat_history = []
+                st.rerun()
+
+    # ================================================
+    # RIGHT COLUMN — Chat Interface
+    # ================================================
+    with right_col:
+        st.subheader("Chat")
+
+        if not st.session_state.pdf_processed:
+            # PDF upload nahi hui toh guide karo user ko
+            st.info("Upload and process a PDF from the left panel to start.")
+            st.markdown("""
+            **How it works:**
+            - Upload any PDF document
+            - The app splits it into chunks and creates embeddings
+            - Ask questions in plain English
+            - Get answers with exact page references
+            """)
+
+        else:
+            # Chat history dikhao — purane sawal jawab
+            for chat in st.session_state.chat_history:
+                with st.chat_message("user"):
+                    st.write(chat["question"])
+
+                with st.chat_message("assistant"):
+                    st.write(chat["answer"])
+
+                    # Sources expander mein hide karo — clean UI
+                    if chat["sources"]:
+                        with st.expander("View Sources"):
+                            for source in chat["sources"]:
+                                st.caption(f"- {source}")
+
+            # Question input — page ke bottom pe stick karta hai
+            user_question = st.chat_input("Ask anything about your PDF...")
+
+            if user_question:
+                with st.chat_message("user"):
+                    st.write(user_question)
+
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        answer, sources = get_answer(
+                            st.session_state.rag_chain,
+                            user_question
+                        )
+
+                    st.write(answer)
+
+                    if sources:
+                        with st.expander("View Sources"):
+                            for source in sources:
+                                st.caption(f"- {source}")
+
+                # Conversation history mein save karo
+                st.session_state.chat_history.append({
+                    "question": user_question,
+                    "answer": answer,
+                    "sources": sources
+                })
+
+
+# ============================================================
+# ENTRY POINT
+# Seedha run karo toh main() call hoga
+# Koi import kare toh nahi chalega automatically
+# ============================================================
+if __name__ == "__main__":
+    main()
