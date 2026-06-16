@@ -1,1 +1,23 @@
+# Virtual environment — kabhi push mat karna
 venv/
+
+# API keys and secrets — MOST IMPORTANT
+.env
+
+# Python cache files — useless hain GitHub pe
+__pycache__/
+*.pyc
+*.pyo
+
+# ChromaDB local database folder — ye locally generate hoga
+chroma_db/
+
+# VS Code settings — personal hai, project se related nahi
+.vscode/
+
+# Uploaded PDFs — user data GitHub pe nahi jaana chahiye
+docs/
+
+# OS generated files
+.DS_Store
+Thumbs.db
