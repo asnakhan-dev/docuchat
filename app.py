@@ -24,9 +24,9 @@ EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 LLM_MODEL = "llama-3.3-70b-versatile"
 
 
-# ------------------------------------------------------------------
+
 # PDF PROCESSING
-# ------------------------------------------------------------------
+
 
 def load_and_split_pdf(pdf_path):
     loader = PyPDFLoader(pdf_path)
@@ -81,9 +81,9 @@ def load_vector_store(collection_name):
     )
 
 
-# ------------------------------------------------------------------
+
 # RAG CHAIN
-# ------------------------------------------------------------------
+
 
 def create_rag_chain(vector_store):
     llm = ChatGroq(
@@ -145,9 +145,9 @@ def get_answer(rag_tuple, question):
     return answer, sources
 
 
-# ------------------------------------------------------------------
+
 # SESSION STATE
-# ------------------------------------------------------------------
+
 
 def init_session():
     defaults = {
@@ -179,9 +179,9 @@ def switch_to_pdf(pdf_name):
     st.session_state.pdf_processed = True
 
 
-# ------------------------------------------------------------------
+
 # UI
-# ------------------------------------------------------------------
+
 
 def main():
     st.set_page_config(page_title="DocuChat", layout="wide")
@@ -204,9 +204,9 @@ def main():
 
     st.divider()
 
-    # ------------------------------------------------------------------
+    
     # HISTORY PANEL
-    # ------------------------------------------------------------------
+    
     if st.session_state.show_history:
         st.subheader("Chat History")
 
@@ -237,12 +237,12 @@ def main():
 
         return
 
-    # ------------------------------------------------------------------
+    
     # MAIN LAYOUT
-    # ------------------------------------------------------------------
+    
     left_col, right_col = st.columns([1, 2])
 
-    # ---- LEFT PANEL ----
+    # LEFT PANEL 
     with left_col:
         st.subheader("Upload PDF")
 
@@ -312,7 +312,7 @@ def main():
                     st.session_state.all_histories[st.session_state.active_pdf] = []
                 st.rerun()
 
-    # ---- RIGHT PANEL ----
+    # RIGHT PANEL 
     with right_col:
         if st.session_state.active_pdf:
             st.subheader(f"Chat — {st.session_state.active_pdf}")
