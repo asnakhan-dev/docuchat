@@ -5,14 +5,14 @@ FROM python:3.11-slim
 # To set working directpry in container
 WORKDIR /app
 
-# dependencies install karo
+# install dependencies  
 # build-essential — Some python packages needs to be compiled
 # curl — for curl health checks
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
     && rm -rf /var/lib/apt/lists/*
-# rm -rf /var/lib/apt/lists/* — cache clean karo, image size kam karo
+# rm -rf /var/lib/apt/lists/* — clean cache, decrease the image size 
 
 # To copy requiremenst first 
 COPY requirements.txt .
@@ -31,10 +31,10 @@ EXPOSE 8501
 # Health check — To check container working properly or not 
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
-# App run karo
-# --server.address=0.0.0.0 — bahar se accessible ho container
+# Run the app 
+# --server.address=0.0.0.0 — container should be accesible from outside
 # --server.port=8501 — fixed port
-# --server.fileWatcherType=none — production mein file watching off
+# --server.fileWatcherType=none — File watching off in production 
 CMD ["streamlit", "run", "app.py", \
      "--server.address=0.0.0.0", \
      "--server.port=8501", \
