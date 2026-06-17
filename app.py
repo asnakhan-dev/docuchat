@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
@@ -51,10 +51,9 @@ def get_collection_name(pdf_name):
 def create_vector_store(chunks, pdf_name):
     collection_name = get_collection_name(pdf_name)
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL,
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True}
+    embeddings = HuggingFaceInferenceAPIEmbeddings(
+        api_key=os.getenv("HF_TOKEN"),
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
     vector_store = Chroma.from_documents(
@@ -68,11 +67,11 @@ def create_vector_store(chunks, pdf_name):
 
 
 def load_vector_store(collection_name):
-    embeddings = HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL,
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True}
+    embeddings = HuggingFaceInferenceAPIEmbeddings(
+        api_key=os.getenv("HF_TOKEN"),
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
+    
 
     return Chroma(
         persist_directory=CHROMA_DB_PATH,
