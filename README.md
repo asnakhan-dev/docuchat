@@ -4,10 +4,21 @@ A multi-document RAG (Retrieval-Augmented Generation) application that lets you 
 
 **Live App:** [docuchat-asnakhan.streamlit.app](https://docuchat-asnakhan.streamlit.app/)
 
-
+## Demo
 
 https://github.com/user-attachments/assets/1ceb1c54-9def-4034-a3d4-7c8d3939bfc0
 
+<br><br>
+
+<img width="1918" height="1078" alt="Upload and process a PDF" src="https://github.com/user-attachments/assets/d9a2d52d-abb2-4326-9d08-643894d8d051" />
+
+<br><br>
+
+<img width="1917" height="1078" alt="Chat with sources and page citations" src="https://github.com/user-attachments/assets/d5b6d237-94d8-4fc7-8df2-b2bac2d28c47" />
+
+<br><br>
+
+<img width="1918" height="1078" alt="Multi-PDF history view" src="https://github.com/user-attachments/assets/6c6d15bb-2a4d-4be1-9fc5-9d2b80a1b244" />
 
 
 ---
@@ -16,17 +27,7 @@ https://github.com/user-attachments/assets/1ceb1c54-9def-4034-a3d4-7c8d3939bfc0
 
 DocuChat solves a common problem — reading long documents to find specific information is slow. It chunks any uploaded PDF, embeds the content into a vector database, and uses retrieval-augmented generation to answer questions strictly from the document's actual content, with page-level source citations to prevent hallucination.
 
-The app supports multiple PDFs simultaneously, each stored in its own isolated vector collection, with persistent per-document chat history.
-
-<img width="1918" height="1078" alt="Screenshot 2026-06-18 114700" src="https://github.com/user-attachments/assets/d9a2d52d-abb2-4326-9d08-643894d8d051" />
-
-
-<img width="1917" height="1078" alt="Screenshot 2026-06-18 115600" src="https://github.com/user-attachments/assets/d5b6d237-94d8-4fc7-8df2-b2bac2d28c47" />
-
-
-<img width="1918" height="1078" alt="Screenshot 2026-06-18 115018" src="https://github.com/user-attachments/assets/6c6d15bb-2a4d-4be1-9fc5-9d2b80a1b244" />
-
-
+The app supports multiple PDFs simultaneously, each stored in its own isolated vector collection, with persistent per-document chat history
 
 ## Features
 
