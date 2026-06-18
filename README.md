@@ -4,6 +4,12 @@ A multi-document RAG (Retrieval-Augmented Generation) application that lets you 
 
 **Live App:** [docuchat-asnakhan.streamlit.app](https://docuchat-asnakhan.streamlit.app/)
 
+
+
+https://github.com/user-attachments/assets/1ceb1c54-9def-4034-a3d4-7c8d3939bfc0
+
+
+
 ---
 
 ## Overview
