@@ -41,8 +41,5 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/docuchat:latest
 
-      # Step 6: Trigger deploy on render
-      - name: Deploy to Render
-        run: |
-          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
-      # Render deploy hook URL  to be saved in  GitHub Secrets 
+     
+      
