@@ -18,6 +18,16 @@ DocuChat solves a common problem — reading long documents to find specific inf
 
 The app supports multiple PDFs simultaneously, each stored in its own isolated vector collection, with persistent per-document chat history.
 
+<img width="1918" height="1078" alt="Screenshot 2026-06-18 114700" src="https://github.com/user-attachments/assets/d9a2d52d-abb2-4326-9d08-643894d8d051" />
+
+
+<img width="1917" height="1078" alt="Screenshot 2026-06-18 115600" src="https://github.com/user-attachments/assets/d5b6d237-94d8-4fc7-8df2-b2bac2d28c47" />
+
+
+<img width="1918" height="1078" alt="Screenshot 2026-06-18 115018" src="https://github.com/user-attachments/assets/6c6d15bb-2a4d-4be1-9fc5-9d2b80a1b244" />
+
+
+
 ## Features
 
 - **Chat with any PDF** — upload a document and ask questions in plain English
