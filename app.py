@@ -6,7 +6,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
@@ -45,9 +45,11 @@ def create_vector_store(chunks):
         huggingfacehub_api_token=os.getenv("HF_TOKEN")
     )
 
-    # FAISS is used instead of ChromaDB because Streamlit Cloud
-    # uses ephemeral storage that resets on restart — FAISS stays in session memory
-    vector_store = FAISS.from_documents(chunks, embeddings)
+    vector_store = Chroma.from_documents(
+        documents=chunks,
+        embedding=embeddings
+    )
+
     return vector_store
 
 
