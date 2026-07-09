@@ -23,12 +23,16 @@ EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 LLM_MODEL = "llama3-70b-8192"
 
 
+# loads PDF from disk and splits it into overlapping chunks for embedding
 def load_and_split_pdf(pdf_path):
-    loader = PyPDFLoader(pdf_path)
-    documents = loader.load()
+    try:
+        loader = PyPDFLoader(pdf_path)
+        documents = loader.load()
+    except Exception as e:
+        if "decrypt" in str(e).lower() or "encrypted" in str(e).lower():
+            raise ValueError("This PDF is password protected. Please upload an unencrypted PDF.")
+        raise e
 
-    # RecursiveCharacterTextSplitter splits by paragraph, line, sentence, word in order
-    # chunk_overlap=200 ensures context is not lost at chunk boundaries
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
@@ -39,6 +43,7 @@ def load_and_split_pdf(pdf_path):
     return splitter.split_documents(documents)
 
 
+# embeds chunks using HuggingFace Inference API and stores them in an in-memory Chroma vector store
 def create_vector_store(chunks):
     embeddings = HuggingFaceEndpointEmbeddings(
         model="sentence-transformers/all-MiniLM-L6-v2",
@@ -53,22 +58,22 @@ def create_vector_store(chunks):
     return vector_store
 
 
+# builds the LCEL RAG chain: retriever → prompt → LLM → output parser
 def create_rag_chain(vector_store):
     llm = ChatGroq(
         api_key=GROQ_API_KEY,
         model_name=LLM_MODEL,
-        temperature=0.2,  # low temperature for factual, grounded answers
+        temperature=0.2,
         max_tokens=1024
     )
 
-    # top 4 most similar chunks retrieved per query
+    # top-4 similarity search over the vector store
     retriever = vector_store.as_retriever(
         search_type="similarity",
         search_kwargs={"k": 4}
     )
 
-    # prompt constrains the LLM to answer strictly from retrieved context
-    # prevents hallucination by explicitly instructing it not to guess
+    # constrains the LLM to answer only from retrieved context to prevent hallucination
     prompt = PromptTemplate(
         template="""You are a helpful assistant that answers questions strictly based on the provided document context.
 
@@ -90,7 +95,6 @@ Answer:""",
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
 
-    # LCEL pipeline: retrieve → format → prompt → llm → parse output
     chain = (
         {
             "context": retriever | format_docs,
@@ -104,12 +108,12 @@ Answer:""",
     return chain, retriever
 
 
+# runs the RAG chain and returns the answer along with source page references
 def get_answer(rag_tuple, question):
     chain, retriever = rag_tuple
     answer = chain.invoke(question)
-
-    # retriever called separately to extract page-level source metadata
     source_docs = retriever.invoke(question)
+
     sources = list(set(
         f"Page {doc.metadata.get('page', 0) + 1} — {os.path.basename(doc.metadata.get('source', 'Unknown'))}"
         for doc in source_docs
@@ -118,10 +122,11 @@ def get_answer(rag_tuple, question):
     return answer, sources
 
 
+# initializes session state keys with default values on first load
 def init_session():
     defaults = {
-        "all_histories": {},   # {pdf_name: [{question, answer, sources}]}
-        "vector_stores": {},   # {pdf_name: faiss_vector_store}
+        "all_histories": {},
+        "vector_stores": {},
         "rag_chain": None,
         "pdf_processed": False,
         "processed_pdfs": set(),
@@ -133,6 +138,7 @@ def init_session():
             st.session_state[key] = val
 
 
+# returns chat history for the currently active PDF
 def get_active_history():
     pdf = st.session_state.active_pdf
     if pdf and pdf in st.session_state.all_histories:
@@ -140,6 +146,7 @@ def get_active_history():
     return []
 
 
+# loads the vector store for the selected PDF and rebuilds the RAG chain
 def switch_to_pdf(pdf_name):
     vector_store = st.session_state.vector_stores[pdf_name]
     st.session_state.rag_chain = create_rag_chain(vector_store)
@@ -221,23 +228,28 @@ def main():
             else:
                 st.success(f"Uploaded: {uploaded_file.name}")
                 if st.button("Process PDF", type="primary", use_container_width=True):
-                    with st.spinner("Processing..."):
-                        st.info("Chunking PDF...")
-                        chunks = load_and_split_pdf(pdf_path)
+                    try:
+                        with st.spinner("Processing..."):
+                            st.info("Chunking PDF...")
+                            chunks = load_and_split_pdf(pdf_path)
 
-                        st.info("Creating embeddings...")
-                        vector_store = create_vector_store(chunks)
+                            st.info("Creating embeddings...")
+                            vector_store = create_vector_store(chunks)
 
-                        st.info("Building RAG chain...")
-                        st.session_state.vector_stores[uploaded_file.name] = vector_store
-                        st.session_state.processed_pdfs.add(uploaded_file.name)
-                        st.session_state.all_histories[uploaded_file.name] = []
-                        st.session_state.rag_chain = create_rag_chain(vector_store)
-                        st.session_state.active_pdf = uploaded_file.name
-                        st.session_state.pdf_processed = True
+                            st.info("Building RAG chain...")
+                            st.session_state.vector_stores[uploaded_file.name] = vector_store
+                            st.session_state.processed_pdfs.add(uploaded_file.name)
+                            st.session_state.all_histories[uploaded_file.name] = []
+                            st.session_state.rag_chain = create_rag_chain(vector_store)
+                            st.session_state.active_pdf = uploaded_file.name
+                            st.session_state.pdf_processed = True
 
-                    st.success("Ready. Start asking questions.")
-                    st.rerun()
+                        st.success("Ready. Start asking questions.")
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(str(e))
+                    except Exception as e:
+                        st.error(f"Error processing PDF: {str(e)}")
 
         if st.session_state.processed_pdfs:
             st.divider()
@@ -257,7 +269,7 @@ def main():
             st.subheader("Details")
             st.markdown(f"**Model:** `{LLM_MODEL}`")
             st.markdown(f"**Embeddings:** `{EMBEDDING_MODEL}`")
-            st.markdown(f"**Vector DB:** FAISS")
+            st.markdown(f"**Vector DB:** ChromaDB (in-memory)")
             st.markdown(f"**Chunk size:** 1000 chars")
             st.markdown(f"**Top-K:** 4 chunks")
 
