@@ -20,7 +20,7 @@ load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-LLM_MODEL = "llama3-70b-8192"
+LLM_MODEL = "openai/gpt-oss-120b"
 
 
 # loads PDF from disk and splits it into overlapping chunks for embedding
