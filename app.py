@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_huggingface import HuggingFaceEndpointEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
@@ -45,9 +45,8 @@ def load_and_split_pdf(pdf_path):
 
 # embeds chunks using HuggingFace Inference API and stores them in an in-memory Chroma vector store
 def create_vector_store(chunks):
-    embeddings = HuggingFaceEndpointEmbeddings(
-        model="sentence-transformers/all-MiniLM-L6-v2",
-        huggingfacehub_api_token=os.getenv("HF_TOKEN")
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
     vector_store = Chroma.from_documents(
