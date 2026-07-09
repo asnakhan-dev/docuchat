@@ -6,7 +6,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
@@ -19,19 +19,16 @@ if sys.platform == "win32":
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-CHROMA_DB_PATH = "chroma_db"
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-LLM_MODEL = "llama-3.3-70b-versatile"
-
-
-
-# PDF PROCESSING
+LLM_MODEL = "llama3-70b-8192"
 
 
 def load_and_split_pdf(pdf_path):
     loader = PyPDFLoader(pdf_path)
     documents = loader.load()
 
+    # RecursiveCharacterTextSplitter splits by paragraph, line, sentence, word in order
+    # chunk_overlap=200 ensures context is not lost at chunk boundaries
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
@@ -42,61 +39,34 @@ def load_and_split_pdf(pdf_path):
     return splitter.split_documents(documents)
 
 
-def get_collection_name(pdf_name):
-    name = pdf_name.lower().replace(".pdf", "").replace(" ", "_").replace("-", "_")
-    name = "".join(c for c in name if c.isalnum() or c == "_")
-    return name[:50]
-
-
-def create_vector_store(chunks, pdf_name):
-    collection_name = get_collection_name(pdf_name)
-
+def create_vector_store(chunks):
     embeddings = HuggingFaceEndpointEmbeddings(
         model="sentence-transformers/all-MiniLM-L6-v2",
         huggingfacehub_api_token=os.getenv("HF_TOKEN")
     )
 
-    vector_store = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        persist_directory=CHROMA_DB_PATH,
-        collection_name=collection_name
-    )
-
-    return vector_store, collection_name
-
-
-def load_vector_store(collection_name):
-    embeddings = HuggingFaceEndpointEmbeddings(
-        model="sentence-transformers/all-MiniLM-L6-v2",
-        huggingfacehub_api_token=os.getenv("HF_TOKEN")
-    )
-    
-
-    return Chroma(
-        persist_directory=CHROMA_DB_PATH,
-        embedding_function=embeddings,
-        collection_name=collection_name
-    )
-
-
-
-# RAG CHAIN
+    # FAISS is used instead of ChromaDB because Streamlit Cloud
+    # uses ephemeral storage that resets on restart — FAISS stays in session memory
+    vector_store = FAISS.from_documents(chunks, embeddings)
+    return vector_store
 
 
 def create_rag_chain(vector_store):
     llm = ChatGroq(
         api_key=GROQ_API_KEY,
         model_name=LLM_MODEL,
-        temperature=0.2,
+        temperature=0.2,  # low temperature for factual, grounded answers
         max_tokens=1024
     )
 
+    # top 4 most similar chunks retrieved per query
     retriever = vector_store.as_retriever(
         search_type="similarity",
         search_kwargs={"k": 4}
     )
 
+    # prompt constrains the LLM to answer strictly from retrieved context
+    # prevents hallucination by explicitly instructing it not to guess
     prompt = PromptTemplate(
         template="""You are a helpful assistant that answers questions strictly based on the provided document context.
 
@@ -118,6 +88,7 @@ Answer:""",
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
 
+    # LCEL pipeline: retrieve → format → prompt → llm → parse output
     chain = (
         {
             "context": retriever | format_docs,
@@ -134,8 +105,9 @@ Answer:""",
 def get_answer(rag_tuple, question):
     chain, retriever = rag_tuple
     answer = chain.invoke(question)
-    source_docs = retriever.invoke(question)
 
+    # retriever called separately to extract page-level source metadata
+    source_docs = retriever.invoke(question)
     sources = list(set(
         f"Page {doc.metadata.get('page', 0) + 1} — {os.path.basename(doc.metadata.get('source', 'Unknown'))}"
         for doc in source_docs
@@ -144,19 +116,15 @@ def get_answer(rag_tuple, question):
     return answer, sources
 
 
-
-# SESSION STATE
-
-
 def init_session():
     defaults = {
-        "all_histories": {},    # {pdf_name: [{question, answer, sources}]}
+        "all_histories": {},   # {pdf_name: [{question, answer, sources}]}
+        "vector_stores": {},   # {pdf_name: faiss_vector_store}
         "rag_chain": None,
         "pdf_processed": False,
-        "processed_pdfs": {},   # {pdf_name: collection_name}
+        "processed_pdfs": set(),
         "active_pdf": None,
         "show_history": False,
-        "pending_question": None
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -171,29 +139,23 @@ def get_active_history():
 
 
 def switch_to_pdf(pdf_name):
-    col_name = st.session_state.processed_pdfs[pdf_name]
-    vector_store = load_vector_store(col_name)
+    vector_store = st.session_state.vector_stores[pdf_name]
     st.session_state.rag_chain = create_rag_chain(vector_store)
     st.session_state.active_pdf = pdf_name
     st.session_state.pdf_processed = True
-
-
-
-# UI
 
 
 def main():
     st.set_page_config(page_title="DocuChat", layout="wide")
     init_session()
 
-    # Header
     h1, h2 = st.columns([3, 1])
     with h1:
         st.title("DocuChat")
         if st.session_state.active_pdf:
             st.caption(f"Chatting with: {st.session_state.active_pdf}")
         else:
-            st.caption("Chat with your PDFs using LLaMA 3.3 70B + RAG")
+            st.caption("Chat with your PDFs using LLaMA 3 70B + RAG")
     with h2:
         st.write("")
         st.write("")
@@ -203,9 +165,6 @@ def main():
 
     st.divider()
 
-    
-    # HISTORY PANEL
-    
     if st.session_state.show_history:
         st.subheader("Chat History")
 
@@ -236,12 +195,8 @@ def main():
 
         return
 
-    
-    # MAIN LAYOUT
-    
     left_col, right_col = st.columns([1, 2])
 
-    # LEFT PANEL 
     with left_col:
         st.subheader("Upload PDF")
 
@@ -258,7 +213,6 @@ def main():
 
             if already_done:
                 st.success(f"'{uploaded_file.name}' already processed.")
-                # Auto switch to this PDF if not already active
                 if st.session_state.active_pdf != uploaded_file.name:
                     switch_to_pdf(uploaded_file.name)
                     st.rerun()
@@ -270,10 +224,11 @@ def main():
                         chunks = load_and_split_pdf(pdf_path)
 
                         st.info("Creating embeddings...")
-                        vector_store, col_name = create_vector_store(chunks, uploaded_file.name)
+                        vector_store = create_vector_store(chunks)
 
                         st.info("Building RAG chain...")
-                        st.session_state.processed_pdfs[uploaded_file.name] = col_name
+                        st.session_state.vector_stores[uploaded_file.name] = vector_store
+                        st.session_state.processed_pdfs.add(uploaded_file.name)
                         st.session_state.all_histories[uploaded_file.name] = []
                         st.session_state.rag_chain = create_rag_chain(vector_store)
                         st.session_state.active_pdf = uploaded_file.name
@@ -282,7 +237,6 @@ def main():
                     st.success("Ready. Start asking questions.")
                     st.rerun()
 
-        # Processed PDFs switcher
         if st.session_state.processed_pdfs:
             st.divider()
             st.subheader("Your PDFs")
@@ -296,13 +250,12 @@ def main():
                         switch_to_pdf(pdf_name)
                         st.rerun()
 
-        # Active PDF details
         if st.session_state.pdf_processed:
             st.divider()
             st.subheader("Details")
             st.markdown(f"**Model:** `{LLM_MODEL}`")
             st.markdown(f"**Embeddings:** `{EMBEDDING_MODEL}`")
-            st.markdown(f"**Vector DB:** ChromaDB")
+            st.markdown(f"**Vector DB:** FAISS")
             st.markdown(f"**Chunk size:** 1000 chars")
             st.markdown(f"**Top-K:** 4 chunks")
 
@@ -311,7 +264,6 @@ def main():
                     st.session_state.all_histories[st.session_state.active_pdf] = []
                 st.rerun()
 
-    # RIGHT PANEL 
     with right_col:
         if st.session_state.active_pdf:
             st.subheader(f"Chat — {st.session_state.active_pdf}")
@@ -330,7 +282,6 @@ def main():
             """)
 
         else:
-            # Render existing history first
             history = get_active_history()
             for chat in history:
                 with st.chat_message("user"):
@@ -342,11 +293,9 @@ def main():
                             for s in chat["sources"]:
                                 st.caption(f"- {s}")
 
-            # Input at the bottom — new messages appear above this
             user_question = st.chat_input("Ask anything about this PDF...")
 
             if user_question:
-                # Show new message immediately
                 with st.chat_message("user"):
                     st.write(user_question)
 
@@ -362,10 +311,8 @@ def main():
                             for s in sources:
                                 st.caption(f"- {s}")
 
-                # Save to history once
                 entry = {"question": user_question, "answer": answer, "sources": sources}
                 st.session_state.all_histories[st.session_state.active_pdf].append(entry)
-                # No st.rerun() — avoids duplicate rendering
 
 
 if __name__ == "__main__":
