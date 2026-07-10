@@ -44,19 +44,22 @@ def load_and_split_pdf(pdf_path):
 
 
 # embeds chunks using HuggingFace Inference API and stores them in an in-memory Chroma vector store
-def create_vector_store(chunks):
+def create_vector_store(chunks, pdf_name):
     embeddings = HuggingFaceEndpointEmbeddings(
         model="sentence-transformers/all-MiniLM-L6-v2",
         huggingfacehub_api_token=os.getenv("HF_TOKEN")
     )
 
+    # unique collection name per PDF prevents chunk mixing between documents
+    collection_name = "".join(c for c in pdf_name.lower() if c.isalnum() or c == "_")[:40]
+
     vector_store = Chroma.from_documents(
         documents=chunks,
-        embedding=embeddings
+        embedding=embeddings,
+        collection_name=collection_name
     )
 
     return vector_store
-
 
 # builds the LCEL RAG chain: retriever → prompt → LLM → output parser
 def create_rag_chain(vector_store):
@@ -234,7 +237,7 @@ def main():
                             chunks = load_and_split_pdf(pdf_path)
 
                             st.info("Creating embeddings...")
-                            vector_store = create_vector_store(chunks)
+                            vector_store = create_vector_store(chunks, uploaded_file.name)
 
                             st.info("Building RAG chain...")
                             st.session_state.vector_stores[uploaded_file.name] = vector_store
