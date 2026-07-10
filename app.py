@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_huggingface import HuggingFaceEndpointEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
@@ -21,6 +21,17 @@ load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 LLM_MODEL = "openai/gpt-oss-120b"
+CHROMA_DIR = "chroma_db"
+
+
+def get_embeddings():
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
+
+
+def get_collection_name(pdf_name):
+    return "".join(c for c in pdf_name.lower() if c.isalnum() or c == "_")[:40]
 
 
 # loads PDF from disk and splits it into overlapping chunks for embedding
@@ -39,27 +50,34 @@ def load_and_split_pdf(pdf_path):
         length_function=len,
         separators=["\n\n", "\n", ".", " ", ""]
     )
-
     return splitter.split_documents(documents)
 
 
-# embeds chunks using HuggingFace Inference API and stores them in an in-memory Chroma vector store
+# embeds chunks and persists them to disk under a unique collection per PDF
 def create_vector_store(chunks, pdf_name):
-    embeddings = HuggingFaceEndpointEmbeddings(
-        model="sentence-transformers/all-MiniLM-L6-v2",
-        huggingfacehub_api_token=os.getenv("HF_TOKEN")
-    )
-
-    # unique collection name per PDF prevents chunk mixing between documents
-    collection_name = "".join(c for c in pdf_name.lower() if c.isalnum() or c == "_")[:40]
+    collection_name = get_collection_name(pdf_name)
+    embeddings = get_embeddings()
 
     vector_store = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
+        persist_directory=CHROMA_DIR,
+        collection_name=collection_name
+    )
+    return vector_store
+
+
+# loads an existing persisted collection from disk — no reprocessing needed
+def load_vector_store(pdf_name):
+    collection_name = get_collection_name(pdf_name)
+    embeddings = get_embeddings()
+
+    return Chroma(
+        persist_directory=CHROMA_DIR,
+        embedding_function=embeddings,
         collection_name=collection_name
     )
 
-    return vector_store
 
 # builds the LCEL RAG chain: retriever → prompt → LLM → output parser
 def create_rag_chain(vector_store):
@@ -121,15 +139,35 @@ def get_answer(rag_tuple, question):
         f"Page {doc.metadata.get('page', 0) + 1} — {os.path.basename(doc.metadata.get('source', 'Unknown'))}"
         for doc in source_docs
     ))
-
     return answer, sources
+
+
+# checks if a collection already exists on disk so we skip reprocessing
+def collection_exists(pdf_name):
+    collection_name = get_collection_name(pdf_name)
+    db_path = os.path.join(CHROMA_DIR, "chroma.sqlite3")
+    if not os.path.exists(db_path):
+        return False
+    try:
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='collections'")
+        if not cursor.fetchone():
+            conn.close()
+            return False
+        cursor.execute("SELECT COUNT(*) FROM collections WHERE name=?", (collection_name,))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count > 0
+    except Exception:
+        return False
 
 
 # initializes session state keys with default values on first load
 def init_session():
     defaults = {
         "all_histories": {},
-        "vector_stores": {},
         "rag_chain": None,
         "pdf_processed": False,
         "processed_pdfs": set(),
@@ -149,12 +187,14 @@ def get_active_history():
     return []
 
 
-# loads the vector store for the selected PDF and rebuilds the RAG chain
+# loads vector store from disk and rebuilds the RAG chain for the selected PDF
 def switch_to_pdf(pdf_name):
-    vector_store = st.session_state.vector_stores[pdf_name]
+    vector_store = load_vector_store(pdf_name)
     st.session_state.rag_chain = create_rag_chain(vector_store)
     st.session_state.active_pdf = pdf_name
     st.session_state.pdf_processed = True
+    if pdf_name not in st.session_state.all_histories:
+        st.session_state.all_histories[pdf_name] = []
 
 
 def main():
@@ -167,7 +207,7 @@ def main():
         if st.session_state.active_pdf:
             st.caption(f"Chatting with: {st.session_state.active_pdf}")
         else:
-            st.caption("Chat with your PDFs using LLaMA 3 70B + RAG")
+            st.caption("Chat with your PDFs using RAG + LLM")
     with h2:
         st.write("")
         st.write("")
@@ -184,7 +224,6 @@ def main():
             st.info("No history yet.")
         else:
             pdf_names = [p for p, h in st.session_state.all_histories.items() if h]
-
             if not pdf_names:
                 st.info("No conversations yet.")
             else:
@@ -204,14 +243,12 @@ def main():
         if st.button("Close History"):
             st.session_state.show_history = False
             st.rerun()
-
         return
 
     left_col, right_col = st.columns([1, 2])
 
     with left_col:
         st.subheader("Upload PDF")
-
         uploaded_file = st.file_uploader("Choose a PDF file", type=["pdf"])
 
         if uploaded_file is not None:
@@ -221,12 +258,14 @@ def main():
             with open(pdf_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
-            already_done = uploaded_file.name in st.session_state.processed_pdfs
+            # check disk — not session — so restart never breaks anything
+            already_done = collection_exists(uploaded_file.name)
 
             if already_done:
                 st.success(f"'{uploaded_file.name}' already processed.")
                 if st.session_state.active_pdf != uploaded_file.name:
                     switch_to_pdf(uploaded_file.name)
+                    st.session_state.processed_pdfs.add(uploaded_file.name)
                     st.rerun()
             else:
                 st.success(f"Uploaded: {uploaded_file.name}")
@@ -240,7 +279,6 @@ def main():
                             vector_store = create_vector_store(chunks, uploaded_file.name)
 
                             st.info("Building RAG chain...")
-                            st.session_state.vector_stores[uploaded_file.name] = vector_store
                             st.session_state.processed_pdfs.add(uploaded_file.name)
                             st.session_state.all_histories[uploaded_file.name] = []
                             st.session_state.rag_chain = create_rag_chain(vector_store)
@@ -257,11 +295,9 @@ def main():
         if st.session_state.processed_pdfs:
             st.divider()
             st.subheader("Your PDFs")
-
             for pdf_name in st.session_state.processed_pdfs:
                 is_active = pdf_name == st.session_state.active_pdf
                 btn_label = f"• {pdf_name}" if is_active else pdf_name
-
                 if st.button(btn_label, key=f"switch_{pdf_name}", use_container_width=True):
                     if not is_active:
                         switch_to_pdf(pdf_name)
@@ -272,7 +308,7 @@ def main():
             st.subheader("Details")
             st.markdown(f"**Model:** `{LLM_MODEL}`")
             st.markdown(f"**Embeddings:** `{EMBEDDING_MODEL}`")
-            st.markdown(f"**Vector DB:** ChromaDB (in-memory)")
+            st.markdown(f"**Vector DB:** ChromaDB (persistent)")
             st.markdown(f"**Chunk size:** 1000 chars")
             st.markdown(f"**Top-K:** 4 chunks")
 
@@ -297,7 +333,6 @@ def main():
             - Switch between multiple PDFs anytime
             - Full history saved per PDF
             """)
-
         else:
             history = get_active_history()
             for chat in history:
