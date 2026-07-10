@@ -41,10 +41,9 @@ The app supports multiple PDFs simultaneously, each stored in its own isolated v
 
 | Layer | Technology |
 |---|---|
-| LLM | Groq API — LLaMA 3.3 70B Versatile |
-| Orchestration | LangChain (LCEL) |
-| Embeddings | HuggingFace Inference API (`all-MiniLM-L6-v2`) |
-| Vector Database | ChromaDB |
+| LLM | Groq API — openai/gpt-oss-120b |
+| Embeddings | HuggingFace Embeddings (`all-MiniLM-L6-v2`) — local |
+| Vector Database | ChromaDB (persistent, per-document collections) |
 | Frontend | Streamlit |
 | PDF Parsing | PyPDF |
 | Containerization | Docker |
@@ -54,21 +53,21 @@ The app supports multiple PDFs simultaneously, each stored in its own isolated v
 ## How It Works
 
 1. **Ingestion** — the uploaded PDF is parsed and split into overlapping chunks (1000 characters, 200 character overlap) using a recursive character splitter, preserving context across chunk boundaries.
-2. **Embedding** — each chunk is converted into a vector representation via the HuggingFace Inference API and stored in a dedicated ChromaDB collection for that document.
+2. **Embedding** — each chunk is converted into a vector using HuggingFace's `all-MiniLM-L6-v2` model running locally, and stored in a dedicated ChromaDB collection on disk for that document.
 3. **Retrieval** — when a question is asked, it is embedded using the same model, and the top 4 most relevant chunks are retrieved via cosine similarity search.
-4. **Generation** — the retrieved chunks are passed as context to LLaMA 3.3 70B via Groq, using a prompt template that constrains the model to answer only from the provided context, reducing hallucination.
+4. **Generation** — the retrieved chunks are passed as context to `openai/gpt-oss-120b` via Groq API, using a prompt template that constrains the model to answer only from the provided context, reducing hallucination.
 5. **Response** — the answer is returned along with the exact page numbers it was sourced from.
 
 ```
-PDF Upload → Chunking → Embeddings → ChromaDB
-                                          │
+PDF Upload → Chunking → Local Embeddings → ChromaDB (disk)
+                                                │
 User Question → Embed Question → Similarity Search
-                                          │
-                              Retrieved Context + Question
-                                          │
-                                  LLaMA 3.3 70B (Groq)
-                                          │
-                              Answer + Page Citations
+                                                │
+                                Retrieved Context + Question
+                                                │
+                                openai/gpt-oss-120b (Groq)
+                                                │
+                                    Answer + Page Citations
 ```
 
 ## Running Locally
@@ -91,7 +90,7 @@ pip install -r requirements.txt
 # Set environment variables
 # Create a .env file with:
 # GROQ_API_KEY=your_groq_api_key
-# HF_TOKEN=your_huggingface_token
+
 
 # Run the app
 streamlit run app.py
