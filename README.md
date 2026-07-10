@@ -1,6 +1,6 @@
 # DocuChat
 
-A multi-document RAG (Retrieval-Augmented Generation) application that lets you chat with your PDFs using natural language. Upload any PDF, ask questions, and get accurate answers with exact page citations — powered by LLaMA 3.3 70B.
+A multi-document RAG (Retrieval-Augmented Generation) application that lets you chat with your PDFs using natural language. Upload any PDF, ask questions, and get accurate answers with exact page citations — powered by openai/gpt-oss-120b via Groq API
 
 **Live App:** [docuchat-asnakhan.streamlit.app](https://docuchat-asnakhan.streamlit.app/)
 
