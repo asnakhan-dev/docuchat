@@ -51,6 +51,8 @@ Large Language Models can generate incorrect or hallucinated answers when they l
 
 DocuChat uses Retrieval-Augmented Generation (RAG) to first retrieve the most relevant sections from uploaded documents and then generate answers grounded in that retrieved context. Every response includes page-level citations, improving transparency and reliability.
 
+---
+
 ## Features
 
 - **Chat with any PDF** — upload a document and ask questions in plain English
