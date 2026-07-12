@@ -1,10 +1,24 @@
 # DocuChat
 
-A multi-document RAG (Retrieval-Augmented Generation) application that lets you chat with your PDFs using natural language. Upload any PDF, ask questions, and get accurate answers with exact page citations — powered by openai/gpt-oss-120b via Groq API
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-red?style=for-the-badge)](https://docuchat-asnakhan.streamlit.app/)
+[![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python)](https://python.org)
+[![Streamlit](https://img.shields.io/badge/Streamlit-App-red?style=for-the-badge&logo=streamlit)](https://streamlit.io)
+[![Groq](https://img.shields.io/badge/Groq-GPT--OSS--120B-orange?style=for-the-badge)](https://groq.com)
 
-**Live App:** [docuchat-asnakhan.streamlit.app](https://docuchat-asnakhan.streamlit.app/)
+> A production-ready multi-document RAG application that lets users chat with PDFs using Groq, ChromaDB, HuggingFace Embeddings, and Streamlit.
 
-## Demo
+---
+
+## Live Demo
+
+**Application**
+
+https://docuchat-asnakhan.streamlit.app/
+
+> Hosted on Streamlit Community Cloud. The application may take a few seconds to wake up after inactivity.
+---
+
+## Demo 
 
 https://github.com/user-attachments/assets/1ceb1c54-9def-4034-a3d4-7c8d3939bfc0
 
@@ -29,6 +43,16 @@ DocuChat solves a common problem — reading long documents to find specific inf
 
 The app supports multiple PDFs simultaneously, each stored in its own isolated vector collection, with persistent per-document chat history
 
+---
+
+## Why Retrieval-Augmented Generation?
+
+Large Language Models can generate incorrect or hallucinated answers when they lack relevant context.
+
+DocuChat uses Retrieval-Augmented Generation (RAG) to first retrieve the most relevant sections from uploaded documents and then generate answers grounded in that retrieved context. Every response includes page-level citations, improving transparency and reliability.
+
+---
+
 ## Features
 
 - **Chat with any PDF** — upload a document and ask questions in plain English
@@ -37,6 +61,7 @@ The app supports multiple PDFs simultaneously, each stored in its own isolated v
 - **Persistent chat history** — conversation history is preserved per document
 - **Production-style deployment** — containerized with Docker and deployed via an automated CI/CD pipeline
 
+---
 ## Tech Stack
 
 | Layer | Technology |
@@ -50,7 +75,9 @@ The app supports multiple PDFs simultaneously, each stored in its own isolated v
 | CI/CD | GitHub Actions → Docker Hub |
 | Deployment | Streamlit Cloud |
 
-## How It Works
+---
+
+## RAG Pipeline
 
 1. **Ingestion** — the uploaded PDF is parsed and split into overlapping chunks (1000 characters, 200 character overlap) using a recursive character splitter, preserving context across chunk boundaries.
 2. **Embedding** — each chunk is converted into a vector using HuggingFace's `all-MiniLM-L6-v2` model running locally, and stored in a dedicated ChromaDB collection on disk for that document.
@@ -69,6 +96,38 @@ User Question → Embed Question → Similarity Search
                                                 │
                                     Answer + Page Citations
 ```
+---
+
+## System Architecture
+
+```text
+                 User
+                  │
+                  ▼
+         Streamlit Web Interface
+                  │
+                  ▼
+          Document Processing
+                  │
+        ┌─────────┴─────────┐
+        ▼                   ▼
+   PyPDF Parser      Text Chunking
+        │                   │
+        └─────────┬─────────┘
+                  ▼
+      HuggingFace Embeddings
+                  │
+                  ▼
+      ChromaDB Vector Store
+                  │
+                  ▼
+      Groq GPT-OSS-120B API
+                  │
+                  ▼
+      Answer with Page Citations
+
+```
+---
 
 ## Running Locally
 
@@ -95,6 +154,7 @@ pip install -r requirements.txt
 # Run the app
 streamlit run app.py
 ```
+---
 
 ## Running with Docker
 
@@ -112,6 +172,8 @@ Every push to `main` triggers a GitHub Actions workflow that:
 
 This automates the build process and keeps the containerized image in sync with the latest code.
 
+---
+
 ## Project Structure
 
 ```
@@ -122,11 +184,20 @@ docuchat/
 ├── requirements.txt        # Python dependencies
 └── README.md
 ```
-## License
+---
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+<div align="center">
 
-## Author
+Built with Streamlit · Groq · ChromaDB · Docker
 
-**Asna Khan**
-GitHub: [@asnakhan-dev](https://github.com/asnakhan-dev)
+<br>
+
+**Portfolio Project**
+
+This repository is intended for portfolio and educational demonstration purposes only. The source code may not be copied, redistributed, or submitted as your own work without the author's permission.
+
+<br>
+
+© 2026 Asna Khan. All rights reserved.
+
+</div>
